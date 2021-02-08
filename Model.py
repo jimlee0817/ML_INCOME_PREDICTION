@@ -98,6 +98,7 @@ class Model():
             print("Train Accuracy: ", (good / arr.shape[0]) * 100, " %")
         elif method == Method.LOGISTIC_REGRESSION.value:
             ''' wait for edit'''
+            
                 
                 
                 
