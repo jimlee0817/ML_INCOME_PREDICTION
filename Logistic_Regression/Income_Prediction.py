@@ -173,7 +173,7 @@ X_train, X_mean, X_stdev = normalizeColumn(X_train)
 
 weight, bias, trainAccList, validationAccList, trainLossList, validationLossList = train(X_train, Y_train, method = 'GRADIENT_ADAM')
 
-
+'''
 import matplotlib.pyplot as plt
 
 plt.figure(1)
@@ -187,7 +187,7 @@ plt.plot(validationLossList)
 plt.legend(['train', 'validation'])
 
 plt.show()
-
+'''
         
 
     
