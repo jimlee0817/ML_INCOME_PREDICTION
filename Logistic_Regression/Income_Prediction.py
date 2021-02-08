@@ -14,6 +14,7 @@ print("Directory 2: ", Y_TRAIN_PATH)
 For Testing
 '''
 '''
+
 X_TRAIN_PATH = 'X_train'
 Y_TRAIN_PATH = 'Y_train'
 '''
@@ -22,70 +23,69 @@ Y_train = np.genfromtxt(Y_TRAIN_PATH, delimiter=',', skip_header=1)
 
 
 """Do the normalization of the data"""
-def _normalizeColumn(X, train = True, specifiedColumns = None, xMean = None, xStdev = None):
-    if train:
-        if specifiedColumns == None:
-            specifiedColumns = np.arange(X.shape[1])
-        length = len(specifiedColumns)
-        xMean = np.reshape(np.mean(X[:,specifiedColumns], 0), (1, length))
-        xStdev = np.reshape(np.std(X[:,specifiedColumns], 0), (1, length))
+def normalizeColumn(X, specifiedColumns = None, X_mean = None, X_stdev = None):
+    if specifiedColumns == None:
+        specifiedColumns = np.arange(X.shape[1])
         
-    X[:,specifiedColumns] = np.divide(np.subtract(X[:, specifiedColumns], xMean), xStdev)
+    length = len(specifiedColumns)
+    X_mean = np.reshape(np.mean(X[:,specifiedColumns], 0), (1, length))
+    X_stdev = np.reshape(np.std(X[:,specifiedColumns], 0), (1, length))
+        
+    X[:,specifiedColumns] = np.divide(np.subtract(X[:, specifiedColumns], X_mean), X_stdev)
     
-    return X, xMean, xStdev
+    return X, X_mean, X_stdev
 
 '''Shuffle the data in a random order'''
-def _shuffle(X, Y):
+def shuffle(X, Y):
     randomIndex = np.arange(len(X))
     np.random.shuffle(randomIndex)
-    return X[randomIndex], Y[randomIndex]
+    return (X[randomIndex], Y[randomIndex])
 
 '''Split the data into training data and validation data'''
-def _splitTrainAndValidation(X, Y, valSize = 0.1):
-    trainSize = round(len(X) * (1 - valSize))
+def splitTrainAndValidationData(X, Y, validation_size = 0.1):
+    train_size = int(round(len(X) * (1 - validation_size)))
     
-    return X[0:trainSize], Y[0:trainSize], X[trainSize:None], Y[trainSize:None]
+    return X[0:train_size], Y[0:train_size], X[train_size:None], Y[train_size:None]
 
-def _sigmoid(Z):
+def sigmoid(Z):
     
     return np.clip(1 / (1 + np.exp(-Z)), 1e-6, 1-1e-6)
 
-def _yPredicted(X,w,b):
+def getY(X,w,b):
     
-    return _sigmoid(np.add(np.matmul(X, w),b))
+    return sigmoid(np.add(np.matmul(X, w),b))
 
-def _infer(X,w,b):
+def getRoundY(y):
+    for i in range(len(y)):
+        if y[i] < 0.5:
+            y[i] = 0
+        else:
+            y[i] = 1
+    return y
+
+def computeCrossEntropy(y, y_label):
     
-    return np.round(_yPredicted(X, w, b))
+    return -np.dot(y_label, np.log(y)) - np.dot(1 - y_label, np.log(1 - y))
 
-def _crossEntropy(y, yLabel):
+def getLoss(y, y_label):
+    return computeCrossEntropy(y, y_label)
+
+def getGradient(X, y_label, w, b):
     
-    return -np.dot(yLabel, np.log(y)) - np.dot(1 - yLabel, np.log(1 - y))
-
-def _gradient(X, yLabel, w, b):
+    y = getY(X, w, b)
+    loss = y_label - y
+    w_grad = -np.mean(np.multiply(loss.T, X.T), axis = 1)
+    b_grad = -np.mean(loss)
     
-    y = _yPredicted(X, w, b)
-    L = yLabel - y
-    wGrad = -np.mean(np.multiply(L.T, X.T), axis = 1)
-    bGrad = -np.mean(L)
-    
-    return wGrad, bGrad
+    return w_grad, b_grad
 
-def _gradient_regularization(X, yLabel, w, b, lamda):
-    # return the mean of the graident
-    y = _yPredicted(X, w, b)
-    L = yLabel - y
-    wGrad = -np.mean(np.multiply(L.T, X.T), axis = 1) + lamda * w
-    bGrad = -np.mean(L)
-    return wGrad, bGrad
-
-def _accuracy(y, yLabel):
-    return np.sum(y == yLabel) / len(y)
+def getAccuracy(y, y_label):
+    return np.sum(y == y_label) / len(y)
 
 
-def _train(X, Y, method = 'GRADIENT_ADAM'):
+def train(X, Y, method = 'GRADIENT_ADAM'):
     validation_size = 0.1
-    X_train, y_label, X_validation, y_validation = _splitTrainAndValidation(X, Y, validation_size)
+    X_train, y_label, X_validation, y_validation = splitTrainAndValidationData(X, Y, validation_size)
     print(X_train.shape)
     print(y_label.shape)
     print(X_validation.shape)
@@ -97,49 +97,48 @@ def _train(X, Y, method = 'GRADIENT_ADAM'):
     
     eipsilon = 1e-8
     
-    beta1 = 0.9
-    beta2 = 0.999
+    if method == 'GRADIENT_ADAM':
+        beta1 = 0.9
+        beta2 = 0.999
+        
+        v_w = np.zeros(w.shape)
+        s_w = np.zeros(w.shape)
+        v_b = np.zeros(b.shape)
+        s_b = np.zeros(b.shape)
     
-    v_w = np.zeros(w.shape)
-    s_w = np.zeros(w.shape)
-    v_b = np.zeros(b.shape)
-    s_b = np.zeros(b.shape)
     
-    maxIteration = 41
-    batchSize = 40
-    learningRate = 0.001
+    max_interation = 41
+    batch_size = 25
+    learningRate = 0.0001
     
     step = 1
     
-    trainAccurancy = []
-    validationAccurancy = []
+    trainAccuracy_list = []
+    trainLoss_list = []
+    validationAccuracy_list = []
+    validationLoss_list = []
     
-    for epoch in range(maxIteration):
-        '''Debug'''
-        '''
-        print(w)
-        print(b)
-        '''
-        X_train, y_train = _shuffle(X_train, y_label)
+    
+    
+    for epoch in range(max_interation):
+        X_train_epoch, y_train_epoch = shuffle(X_train, y_label)
         
-        for i in range(int(np.floor(len(X_train)) / batchSize)):
-            X_train_batch = X_train[i * batchSize: (i + 1) * batchSize]
-            y_train_batch = y_train[i * batchSize: (i + 1) * batchSize]
+        for i in range(int(np.floor(len(X_train)) / batch_size)):
+            X_train_batch = X_train_epoch[i * batch_size: (i + 1) * batch_size]
+            y_train_batch = y_train_epoch[i * batch_size: (i + 1) * batch_size]
             
-            if method == 'GRADIENT_REGULARIZATION':
-                wGrad, bGrad = _gradient_regularization(X_train_batch, y_train_batch, w, b, 0.001)
-                w = w - learningRate / np.sqrt(step) * wGrad
-                b = b - learningRate / np.sqrt(step) * bGrad
-            elif method == 'GRADIENT':
-                wGrad, bGrad = _gradient(X_train_batch, y_train_batch, w, b) 
-                w = w - learningRate / np.sqrt(step) * wGrad
-                b = b - learningRate / np.sqrt(step) * bGrad
+            if method == 'GRADIENT':
+                w_grad, b_grad = getGradient(X_train_batch, y_train_batch, w, b) 
+                w = w - learningRate / np.sqrt(step) * w_grad
+                b = b - learningRate / np.sqrt(step) * b_grad
+                
             elif method == 'GRADIENT_ADAM':
-                wGrad, bGrad = _gradient(X_train_batch, y_train_batch, w, b) 
-                v_w = beta1 * v_w + (1 - beta1) * wGrad
-                s_w = beta2 * s_w + (1 - beta2) * wGrad ** 2
-                v_b = beta1 * v_b + (1 - beta1) * bGrad
-                s_b = beta2 * s_b + (1 - beta2) * bGrad ** 2
+                w_grad, b_grad = getGradient(X_train_batch, y_train_batch, w, b) 
+                v_w = beta1 * v_w + (1 - beta1) * w_grad
+                s_w = beta2 * s_w + (1 - beta2) * w_grad ** 2
+                v_b = beta1 * v_b + (1 - beta1) * b_grad
+                s_b = beta2 * s_b + (1 - beta2) * b_grad ** 2
+                
                 v_w_correction = v_w / (1 - beta1 ** step)
                 s_w_correction = s_w / (1 - beta2 ** step)
                 v_b_correction = v_b / (1 - beta1 ** step)
@@ -152,32 +151,42 @@ def _train(X, Y, method = 'GRADIENT_ADAM'):
             
             step += 1
             
-        y_trainPredicted = _infer(X_train, w, b)
-        trainAccurancy.append(_accuracy(y_trainPredicted, y_train))
+        y_train_predicted = getY(X_train, w, b)
+        trainLoss_list.append(getLoss(y_train_predicted, y_label) / len(y_train_predicted))
         
-        y_validationPredicted = _infer(X_validation, w, b)
-        validationAccurancy.append(_accuracy(y_validationPredicted, y_validation))
+        y_train_predicted = getRoundY(y_train_predicted)        
+        trainAccuracy_list.append(getAccuracy(y_train_predicted, y_label))
         
-        print("Epoch", epoch, " Accuracy: ", (_accuracy(y_trainPredicted, y_train)))
         
-    return w, b, trainAccurancy, validationAccurancy
+        y_validation_predicted = getY(X_validation, w, b)
+        validationLoss_list.append(getLoss(y_validation_predicted, y_validation) / len(y_validation_predicted))
+        
+        y_validation_predicted = getRoundY(y_validation_predicted)
+        validationAccuracy_list.append(getAccuracy(y_validation_predicted, y_validation))
+        
+        
+        print("Epoch", epoch, " Training Accuracy: ", (getAccuracy(y_train_predicted, y_label)), " Validation Accuracy: ", (getAccuracy(y_validation_predicted, y_validation)))
+        
+    return w, b, trainAccuracy_list, validationAccuracy_list, trainLoss_list, validationLoss_list
+
+X_train, X_mean, X_stdev = normalizeColumn(X_train)
+
+weight, bias, trainAccList, validationAccList, trainLossList, validationLossList = train(X_train, Y_train, method = 'GRADIENT_ADAM')
 
 
-X_train, X_mean, X_stdev = _normalizeColumn(X_train)
-
-weight, bias, trainAccList, validationAccList = _train(X_train, Y_train, method = 'GRADIENT_ADAM')
-
-'''
 import matplotlib.pyplot as plt
 
+plt.figure(1)
 plt.plot(trainAccList)
 plt.plot(validationAccList)
+
+plt.figure(2)
+
+plt.plot(trainLossList)
+plt.plot(validationLossList)
 plt.legend(['train', 'validation'])
+
 plt.show()
-'''
-
-
-
 
         
 
